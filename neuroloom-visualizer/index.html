@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NeuroLoom Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg-color: #121212;
+      --text-color: #ffffff;
+      --card-color: #1e1e1e;
+      --accent-color: #e57f00;
+      --border-color: #333;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-color);
+      color: var(--text-color);
+      height: 100vh;
+      overflow: hidden;
+    }
+    header {
+      background: #1a1a1a;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    header h1 {
+      font-size: 1.8rem;
+      color: var(--accent-color);
+      margin-right: 20px;
+    }
+    .container {
+      display: flex;
+      height: calc(100vh - 60px);
+      padding: 10px;
+      gap: 10px;
+      box-sizing: border-box;
+    }
+    .sidebar {
+      width: 220px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .card {
+      background: var(--card-color);
+      border-radius: 10px;
+      padding: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
+    .main-content {
+      flex-grow: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .section-title {
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: var(--accent-color);
+    }
+    .grid-graph {
+      background: #000;
+      border: 1px solid var(--border-color);
+      height: 160px;
+    }
+    .meditation-buttons button {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 5px;
+      background: #333;
+      color: white;
+      border: 1px solid var(--accent-color);
+      cursor: pointer;
+    }
+    .meditation-buttons button.selected {
+      background: var(--accent-color);
+      color: black;
+      font-weight: bold;
+    }
+    .highlight {
+      background: #222;
+      color: var(--accent-color);
+      padding: 10px;
+      border-left: 4px solid var(--accent-color);
+    }
+    button.connect {
+      background: var(--accent-color);
+      color: white;
+      padding: 8px;
+      width: 100%;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #timer {
+      text-align: center;
+      margin-top: 5px;
+      font-size: 1rem;
+      color: var(--accent-color);
+    }
+    footer {
+      text-align: center;
+      color: #aaa;
+      font-size: 0.85rem;
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      background: #111;
+      padding: 5px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>⚡️NeuroLoom</h1>
+    <button id="bleConnectBtn" class="connect">Connect</button>
+  </header>
+
+  <div class="container">
+    <div class="sidebar">
+      <div class="card" style="text-align:center">
+        <div style="font-size:2rem; color:var(--accent-color);">🔹</div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;">Meditation</h3>
+        <div class="meditation-buttons">
+          <button class="duration-btn" data-mins="3">3 min</button>
+          <button class="duration-btn" data-mins="5">5 min</button>
+          <button class="duration-btn" data-mins="10">10 min</button>
+          <button class="duration-btn" data-mins="15">15 min</button>
+        </div>
+        <button id="beginSessionBtn" class="connect">Begin Session</button>
+        <div id="timer"></div>
+      </div>
+      <div class="card">
+        <h3 class="section-title">Admin Tweet</h3>
+        <p>PADHNA LIKHNA CHHD RAB TEH RAKH AAS,<br>CHHK KE RAJAI SO JA RABB KRUGA PASS</p>
+        <p style="font-weight: bold; color: var(--accent-color);">&mdash; Admin</p>
+      </div>
+    </div>
+
+    <div class="main-content">
+      <div class="card">
+        <h3 class="section-title">Brain Activity</h3>
+        <canvas id="eegChart" class="grid-graph"></canvas>
+        <canvas id="emgChart" class="grid-graph" style="margin-top: 10px;"></canvas>
+      </div>
+
+      <div class="card">
+        <h3 class="section-title">Heart Activity</h3>
+        <canvas id="ecgChart" class="grid-graph"></canvas>
+        <div style="display: flex; justify-content: space-between; margin-top: 10px;">
+          <span>LOW HRV</span>
+          <span>AVG HRV</span>
+          <span>HIGH HRV</span>
+          <span style="color: var(--accent-color); font-weight: 600;">Analyzing...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    @Made by Anshpreet Singh Bindra
+  </footer>
+
+  <script>
+    let device, characteristic, sessionDuration = 0, eegChart, ecgChart, emgChart;
+    let eegData = [], ecgData = [], emgData = [], sessionData = [];
+    const maxPoints = 100;
+
+    document.getElementById("bleConnectBtn").addEventListener("click", async () => {
+      try {
+        device = await navigator.bluetooth.requestDevice({
+          filters: [{ namePrefix: "Neuro" }],
+          optionalServices: ["4fafc201-1fb5-459e-8fcc-c5c9c331914b"]
+        });
+
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService("4fafc201-1fb5-459e-8fcc-c5c9c331914b");
+        characteristic = await service.getCharacteristic("beb5483e-36e1-4688-b7f5-ea07361b26a8");
+        const controlChar = await service.getCharacteristic("0000ff01-0000-1000-8000-00805f9b34fb");
+
+        await characteristic.startNotifications();
+        characteristic.addEventListener("characteristicvaluechanged", handleData);
+        await controlChar.writeValue(new TextEncoder().encode("START"));
+
+        console.log("✅ Connected to ESP32 via BLE and sent START command");
+      } catch (error) {
+        console.error("❌ Bluetooth connection failed", error);
+      }
+    });
+
+    function handleData(event) {
+      const value = new TextDecoder().decode(event.target.value);
+      const eegMatch = value.match(/EEG:(\d+),%:(\d+\.?\d*)/);
+      const ecgMatch = value.match(/ECG:(\d+),%:(\d+\.?\d*)/);
+      const emgMatch = value.match(/EMG:(\d+),%:(\d+\.?\d*)/);
+
+      if (eegMatch) {
+        const val = parseInt(eegMatch[1]);
+        eegData.push(val);
+        sessionData.push(val);
+        if (eegData.length > maxPoints) eegData.shift();
+        eegChart.data.datasets[0].data = eegData;
+        eegChart.update();
+      }
+      if (ecgMatch) {
+        const val = parseInt(ecgMatch[1]);
+        ecgData.push(val);
+        if (ecgData.length > maxPoints) ecgData.shift();
+        ecgChart.data.datasets[0].data = ecgData;
+        ecgChart.update();
+      }
+      if (emgMatch) {
+        const val = parseInt(emgMatch[1]);
+        emgData.push(val);
+        if (emgData.length > maxPoints) emgData.shift();
+        emgChart.data.datasets[0].data = emgData;
+        emgChart.update();
+      }
+    }
+
+    document.querySelectorAll(".duration-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".duration-btn").forEach(b => b.classList.remove("selected"));
+        btn.classList.add("selected");
+        sessionDuration = parseInt(btn.dataset.mins) * 60 * 1000;
+      });
+    });
+
+    document.getElementById("beginSessionBtn").addEventListener("click", () => {
+      if (sessionDuration > 0) {
+        sessionData = [];
+        const timerDisplay = document.getElementById("timer");
+        document.querySelectorAll(".duration-btn").forEach(b => b.disabled = true);
+        document.getElementById("beginSessionBtn").disabled = true;
+
+        let timeLeft = sessionDuration / 1000;
+        timerDisplay.textContent = `⏳ Time left: ${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, "0")}`;
+
+        const sessionTimer = setInterval(() => {
+          timeLeft--;
+          if (timeLeft <= 0) {
+            clearInterval(sessionTimer);
+            timerDisplay.textContent = "✅ Session Complete!";
+            analyzeSession();
+            document.querySelectorAll(".duration-btn").forEach(b => b.disabled = false);
+            document.getElementById("beginSessionBtn").disabled = false;
+          } else {
+            timerDisplay.textContent = `⏳ Time left: ${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, "0")}`;
+          }
+        }, 1000);
+      } else {
+        alert("Please select session duration");
+      }
+    });
+
+    function analyzeSession() {
+      let total = sessionData.length;
+      if (total === 0) return alert("No EEG data to analyze");
+
+      let attentive = 0, relaxed = 0, thinking = 0, stable = 0;
+      sessionData.forEach(val => {
+        if (val >= 3000) attentive++;
+        else if (val >= 2000) thinking++;
+        else if (val >= 1000) relaxed++;
+        else stable++;
+      });
+
+      const percent = p => ((p / total) * 100).toFixed(1);
+      alert(`🧠 Session Analysis:\nAttentive: ${percent(attentive)}%\nThinking: ${percent(thinking)}%\nRelaxed: ${percent(relaxed)}%\nStable: ${percent(stable)}%`);
+    }
+
+    function createLineChart(ctx, label) {
+      return new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: Array(maxPoints).fill(""),
+          datasets: [{
+            label: label,
+            data: Array(maxPoints).fill(0),
+            borderColor: "#e57f00",
+            borderWidth: 2,
+            tension: 0.3,
+            pointRadius: 0
+          }]
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          scales: {
+            y: { min: 0, max: 4095 },
+            x: { display: false }
+          },
+          plugins: {
+            legend: { display: false }
+          }
+        }
+      });
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      eegChart = createLineChart(document.getElementById("eegChart").getContext("2d"), "EEG");
+      ecgChart = createLineChart(document.getElementById("ecgChart").getContext("2d"), "ECG");
+      emgChart = createLineChart(document.getElementById("emgChart").getContext("2d"), "EMG");
+    });
+  </script>
+</body>
+</html>
